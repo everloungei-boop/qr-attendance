@@ -11,30 +11,14 @@
         .page.active { display: block; }
         #scan-page { padding: 0; background: #000; }
         #reader { width: 100vw; height: 100vh; }
-        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
-
     <div id="scan-page" class="page active"><div id="reader"></div></div>
-
-    <div id="history-page" class="page">
-        <h3 style="margin-top:0">Recent Scans</h3>
-        <div id="historyContainer"></div>
-    </div>
-
-    <div id="users-page" class="page">
-        <h3>Configuration</h3>
-        <p>Google Script URL:</p>
-        <input type="text" id="scriptUrl" style="width:100%; padding:12px; border-radius:8px; border:1px solid #ccc;" onchange="saveConfig()">
-    </div>
-
-    <div id="settings-page" class="page">
-        <h3>Settings</h3>
-        <div class="card">
-            <button onclick="clearHistory()" style="color: #f43f5e; border:none; background:none; font-weight:bold; width:100%; text-align:left;">Clear Local History</button>
-        </div>
-    </div>
+    <div id="history-page" class="page"><h3 style="margin-top:0">Recent Scans</h3><div id="historyContainer"></div></div>
+    <div id="users-page" class="page"><h3>Configuration</h3><p>Script URL:</p><input type="text" id="scriptUrl" style="width:100%; padding:12px;" onchange="saveConfig()"></div>
+    <div id="settings-page" class="page"><h3>Settings</h3><div class="card"><button onclick="clearHistory()" style="color:red; border:none; background:none;">Clear Local History</button></div></div>
 
     <script>
         let scannerMode = "IN";
@@ -49,11 +33,12 @@
                 try { 
                     await html5QrCode.stop(); 
                     html5QrCode.clear(); 
-                } catch (e) { console.log("Stop error:", e); }
+                } catch (e) { console.log(e); }
+                html5QrCode = null;
             }
 
             if (pageName === 'scan') {
-                startScanner();
+                setTimeout(startScanner, 300);
             } else if (pageName === 'history') {
                 renderHistory();
             }
@@ -64,41 +49,27 @@
 
         function startScanner() {
             html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start(
-                { facingMode: "environment" }, 
-                { fps: 20, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } },
-                onScanSuccess
-            ).catch(err => setTimeout(startScanner, 1000));
+            html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } }, onScanSuccess)
+            .catch(err => setTimeout(startScanner, 1500));
         }
 
         async function onScanSuccess(decodedText) {
-            const entry = {
-                qrContent: decodedText,
-                status: scannerMode,
-                time: new Date().toLocaleString()
-            };
+            const entry = { qrContent: decodedText, status: scannerMode, time: new Date().toLocaleString() };
             localHistory.unshift(entry);
             localStorage.setItem('qr_history', JSON.stringify(localHistory));
-            
             const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
             if(url) fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
-
             await html5QrCode.pause();
             setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
         }
 
         function renderHistory() {
             const container = document.getElementById('historyContainer');
-            container.innerHTML = localHistory.map(h => `
-                <div class="card">
-                    <div style="font-weight:bold;">${h.qrContent}</div>
-                    <div style="font-size:0.85em; color:#64748b;">${h.time} | <strong>${h.status}</strong></div>
-                </div>
-            `).join('');
+            container.innerHTML = localHistory.map(h => `<div class="card"><strong>${h.qrContent}</strong><br><small>${h.time} | ${h.status}</small></div>`).join('');
         }
 
         function saveConfig() { localStorage.setItem('api_url', document.getElementById('scriptUrl').value); }
-        function clearHistory() { if(confirm("Clear history?")) { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); } }
+        function clearHistory() { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); }
 
         window.onload = () => {
             document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
