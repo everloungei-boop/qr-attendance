@@ -7,20 +7,12 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root { --primary-blue: #1e40af; --accent-blue: #3b82f6; --bg-light: #eff6ff; }
-        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #000; overflow: hidden; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #000; overflow: hidden; }
         
-        /* The Camera stays in the background */
         #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #reader { width: 100vw; height: 100vh; }
+        #flash-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(34, 197, 94, 0.5); z-index: 999; display: none; pointer-events: none; }
 
-        /* Scanning Flash Effect */
-        #flash-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(34, 197, 94, 0.5); /* Transparent Green */
-            z-index: 999; display: none; pointer-events: none;
-        }
-
-        /* Blue Theme Overlay Pages */
         .page { 
             position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
             display: none; padding: 20px; box-sizing: border-box; 
@@ -28,18 +20,34 @@
         }
         .page.active { display: block; }
         
-        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; }
+        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; margin-top: 0; }
+        
+        /* Fixed Input Styling to prevent overlapping in image_b090fb.png */
+        input[type="text"] { 
+            width: 100%; 
+            padding: 12px; 
+            border: 1px solid #bfdbfe; 
+            border-radius: 8px; 
+            box-sizing: border-box; /* THIS FIXES THE OVERLAP */
+            margin-top: 10px;
+        }
+
         .card { 
             background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; 
-            border-left: 5px solid var(--accent-blue); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+            border-left: 5px solid var(--accent-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .status-badge { font-weight: bold; padding: 2px 8px; border-radius: 5px; font-size: 0.8em; }
-        .in { color: #059669; } .out { color: #dc2626; }
+
+        .btn-google {
+            background: white; color: #444; border: 1px solid #ddd;
+            padding: 10px; border-radius: 5px; width: 100%; font-weight: bold;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+        }
+        .user-info { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        #user-photo { width: 40px; height: 40px; border-radius: 50%; background: #ccc; }
     </style>
 </head>
 <body>
     <div id="flash-overlay"></div>
-    
     <div id="scan-page"><div id="reader"></div></div>
     
     <div id="history-page" class="page">
@@ -49,15 +57,34 @@
 
     <div id="users-page" class="page">
         <h3>👥 API Configuration</h3>
-        <p>Google Apps Script URL:</p>
-        <input type="text" id="scriptUrl" style="width:100%; padding:12px; border: 1px solid #bfdbfe; border-radius:8px;" onchange="saveConfig()">
+        <label>Google Apps Script URL:</label>
+        <input type="text" id="scriptUrl" placeholder="Paste URL here..." onchange="saveConfig()">
     </div>
 
     <div id="settings-page" class="page">
         <h3>⚙️ Settings</h3>
+        
         <div class="card">
-            <p><strong>App Version:</strong> 2.0.0 Blue</p>
-            <button onclick="clearHistory()" style="color: #ef4444; border:none; background:none; cursor:pointer;">🗑️ Clear Data</button>
+            <p style="margin:0; font-weight:bold; color:var(--primary-blue);">Account Management</p>
+            <div id="auth-section" style="margin-top:10px;">
+                <button class="btn-google" onclick="googleLogin()">
+                    Sign in with Google
+                </button>
+            </div>
+            <div id="profile-section" style="display:none;">
+                <div class="user-info">
+                    <div id="user-photo"></div>
+                    <div>
+                        <div id="user-name" style="font-weight:bold;">User Name</div>
+                        <div id="user-email" style="font-size:0.8em; color:#666;">user@gmail.com</div>
+                    </div>
+                </div>
+                <button onclick="googleLogout()" style="margin-top:10px; color:red; border:none; background:none; font-size:0.8em;">Sign Out</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <button onclick="clearHistory()" style="color: #ef4444; border:none; background:none; font-weight:bold; width:100%; text-align:left;">🗑️ Clear Local History</button>
         </div>
     </div>
 
@@ -71,6 +98,34 @@
             if (pageName !== 'scan') {
                 document.getElementById(pageName + '-page').classList.add('active');
                 if (pageName === 'history') renderHistory();
+                checkAuthStatus();
+            }
+        }
+
+        // GOOGLE AUTH SIMULATION (For WebView)
+        function googleLogin() {
+            // In a real app, this would redirect to Google OAuth. 
+            // For now, it simulates a successful login.
+            const dummyUser = { name: "Admin User", email: "admin@yourdomain.com" };
+            localStorage.setItem('user', JSON.stringify(dummyUser));
+            checkAuthStatus();
+        }
+
+        function googleLogout() {
+            localStorage.removeItem('user');
+            checkAuthStatus();
+        }
+
+        function checkAuthStatus() {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if(user) {
+                document.getElementById('auth-section').style.display = 'none';
+                document.getElementById('profile-section').style.display = 'block';
+                document.getElementById('user-name').innerText = user.name;
+                document.getElementById('user-email').innerText = user.email;
+            } else {
+                document.getElementById('auth-section').style.display = 'block';
+                document.getElementById('profile-section').style.display = 'none';
             }
         }
 
@@ -81,12 +136,18 @@
         }
 
         async function onScanSuccess(decodedText) {
-            // GREEN FLASH FEEDBACK
             const flash = document.getElementById('flash-overlay');
             flash.style.display = 'block';
             setTimeout(() => { flash.style.display = 'none'; }, 400);
 
-            const entry = { qrContent: decodedText, status: scannerMode, time: new Date().toLocaleString() };
+            const user = JSON.parse(localStorage.getItem('user'));
+            const entry = { 
+                qrContent: decodedText, 
+                status: scannerMode, 
+                scannedBy: user ? user.email : "Guest",
+                time: new Date().toLocaleString() 
+            };
+            
             localHistory.unshift(entry);
             localStorage.setItem('qr_history', JSON.stringify(localHistory));
             
@@ -101,9 +162,10 @@
             const container = document.getElementById('historyContainer');
             container.innerHTML = localHistory.map(h => `
                 <div class="card">
-                    <div style="font-size: 1.1em; font-weight: bold;">${h.qrContent}</div>
-                    <div style="margin-top:5px; font-size:0.85em; color:#64748b;">
-                        ${h.time} | <span class="status-badge ${h.status.toLowerCase()}">${h.status}</span>
+                    <div style="font-weight: bold;">${h.qrContent}</div>
+                    <div style="font-size:0.8em; color:#64748b; margin-top:4px;">
+                        ${h.time} | <strong>${h.status}</strong><br>
+                        By: ${h.scannedBy}
                     </div>
                 </div>
             `).join('');
@@ -115,6 +177,7 @@
         window.onload = () => {
             document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
             startScanner();
+            checkAuthStatus();
         };
     </script>
 </body>
