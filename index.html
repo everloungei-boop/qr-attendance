@@ -10,66 +10,74 @@
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #000; overflow: hidden; }
         #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #reader { width: 100vw; height: 100vh; }
+        
+        /* Session Counter UI */
+        #counter-badge {
+            position: fixed; top: 20px; right: 20px; background: rgba(30, 64, 175, 0.9);
+            color: white; padding: 8px 15px; border-radius: 20px; font-weight: bold;
+            z-index: 5; font-size: 0.9em; border: 2px solid white;
+        }
+
         #flash-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(34, 197, 94, 0.5); z-index: 999; display: none; pointer-events: none; }
         .page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; padding: 20px; box-sizing: border-box; background: var(--bg-light); color: #1e293b; z-index: 10; overflow-y: auto; }
         .page.active { display: block; }
-        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; margin-top: 0; }
+        
+        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid #bfdbfe; border-radius: 8px; box-sizing: border-box; margin-top: 5px; margin-bottom: 15px; }
         .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid var(--accent-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-        .btn-save { background: var(--primary-blue); color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-weight: bold; }
+        
+        .action-btn { background: var(--primary-blue); color: white; border: none; padding: 8px 12px; border-radius: 6px; font-size: 0.7em; cursor: pointer; text-transform: uppercase; }
+        .danger-btn { background: #ef4444; }
     </style>
 </head>
 <body>
     <div id="flash-overlay"></div>
+    <div id="counter-badge">Logs: <span id="logCount">0</span></div>
+    
     <div id="scan-page"><div id="reader"></div></div>
     
     <div id="history-page" class="page">
-        <h3>📜 Scan History</h3>
+        <h3>
+            📜 History
+            <div style="display:flex; gap:5px;">
+                <button class="action-btn" onclick="exportToCSV()">Export</button>
+                <button class="action-btn danger-btn" onclick="clearHistory()">Clear</button>
+            </div>
+        </h3>
         <div id="historyContainer"></div>
     </div>
 
     <div id="users-page" class="page">
         <h3>👥 Profile & API</h3>
         <div class="card">
-            <label><strong>Your Name:</strong></label>
-            <input type="text" id="userName" placeholder="Enter your full name" onchange="saveProfile()">
+            <label><strong>Name:</strong></label>
+            <input type="text" id="userName" onchange="saveProfile()">
             <label><strong>Staff ID:</strong></label>
-            <input type="text" id="userId" placeholder="Enter your Employee ID" onchange="saveProfile()">
+            <input type="text" id="userId" onchange="saveProfile()">
         </div>
         <div class="card">
             <label><strong>Google Apps Script URL:</strong></label>
-            <input type="text" id="scriptUrl" placeholder="Paste Script URL here" onchange="saveProfile()">
+            <input type="text" id="scriptUrl" onchange="saveProfile()" placeholder="Paste web app URL here">
         </div>
-        <button class="btn-save" onclick="alert('Profile Updated!')">Save All Settings</button>
-    </div>
-
-    <div id="settings-page" class="page">
-        <h3>⚙️ Settings</h3>
-        <div class="card"><p><strong>App Version:</strong> 2.1.0 Blue</p></div>
-        <div class="card"><button onclick="clearHistory()" style="color:red; border:none; background:none; font-weight:bold;">🗑️ Clear Local History</button></div>
     </div>
 
     <script>
         let scannerMode = "IN";
         let html5QrCode;
         let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
+        let sessionCount = 0;
 
         function navigate(pageName) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('counter-badge').style.display = (pageName === 'scan') ? 'block' : 'none';
             if (pageName !== 'scan') {
                 document.getElementById(pageName + '-page').classList.add('active');
                 if (pageName === 'history') renderHistory();
             }
         }
 
-        function setMode(mode) { 
-            scannerMode = mode; 
-            console.log("Mode changed to: " + mode);
-        }
-
-        function handleManualScan(text) { 
-            if(text) onScanSuccess(text); 
-        }
+        function setMode(mode) { scannerMode = mode; }
+        function handleManualScan(text) { if(text) onScanSuccess(text); }
 
         function startScanner() {
             if (html5QrCode) return;
@@ -78,11 +86,15 @@
         }
 
         async function onScanSuccess(decodedText) {
+            // UI Feedback
             const flash = document.getElementById('flash-overlay');
             flash.style.display = 'block';
-            setTimeout(() => { flash.style.display = 'none'; }, 400);
+            setTimeout(() => flash.style.display = 'none', 400);
 
-            const name = localStorage.getItem('user_name') || "Unknown User";
+            sessionCount++;
+            document.getElementById('logCount').innerText = sessionCount;
+
+            const name = localStorage.getItem('user_name') || "Unknown";
             const uid = localStorage.getItem('user_id') || "Guest";
 
             const entry = { 
@@ -95,10 +107,23 @@
             localHistory.unshift(entry);
             localStorage.setItem('qr_history', JSON.stringify(localHistory));
             
+            // GOOGLE SHEET SUBMISSION
             const url = localStorage.getItem('api_url');
-            if(url) {
-                fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) })
-                .catch(err => console.log("Fetch error:", err));
+            if(url && url.startsWith("https://script.google.com")) {
+                // Using URLSearchParams for better compatibility with Apps Script
+                const params = new URLSearchParams();
+                params.append('qrContent', entry.qrContent);
+                params.append('status', entry.status);
+                params.append('scannedBy', entry.scannedBy);
+                params.append('time', entry.time);
+
+                fetch(url, { 
+                    method: 'POST', 
+                    mode: 'no-cors', 
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: params.toString() 
+                }).catch(err => console.log("Network error"));
             }
 
             if (html5QrCode && html5QrCode.getState() === 2) {
@@ -109,6 +134,10 @@
 
         function renderHistory() {
             const container = document.getElementById('historyContainer');
+            if (localHistory.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#64748b;">No scans found.</p>';
+                return;
+            }
             container.innerHTML = localHistory.map(h => `
                 <div class="card">
                     <div style="font-weight: bold;">${h.qrContent}</div>
@@ -119,13 +148,35 @@
             `).join('');
         }
 
+        function exportToCSV() {
+            if (localHistory.length === 0) return alert("Nothing to export");
+            let csv = "Content,Status,User,Timestamp\n";
+            localHistory.forEach(h => {
+                csv += `"${h.qrContent}","${h.status}","${h.scannedBy}","${h.time}"\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', 'Attendance_Logs.csv');
+            a.click();
+        }
+
         function saveProfile() {
             localStorage.setItem('user_name', document.getElementById('userName').value);
             localStorage.setItem('user_id', document.getElementById('userId').value);
             localStorage.setItem('api_url', document.getElementById('scriptUrl').value);
         }
 
-        function clearHistory() { if(confirm("Clear history?")) { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); } }
+        function clearHistory() {
+            if(confirm("Permanently clear all logs?")) {
+                localHistory = [];
+                localStorage.setItem('qr_history', JSON.stringify(localHistory));
+                sessionCount = 0;
+                document.getElementById('logCount').innerText = "0";
+                renderHistory();
+            }
+        }
 
         window.onload = () => {
             document.getElementById('userName').value = localStorage.getItem('user_name') || "";
