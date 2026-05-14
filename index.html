@@ -1,95 +1,121 @@
-package com.example.attendancescanner;
-
-import android.Manifest;
-import android.content.pm.PackageManager;
-import android.graphics.Color;
-import android.os.Bundle;
-import android.view.View;
-import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
-import android.webkit.WebSettings;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.EditText;
-import android.widget.LinearLayout;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-import com.google.android.material.bottomnavigation.BottomNavigationView;
-
-public class MainActivity extends AppCompatActivity {
-
-    private WebView myWebView;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        myWebView = findViewById(R.id.webview);
-        EditText manualInput = findViewById(R.id.manualInput);
-        Button btnSubmitManual = findViewById(R.id.btnSubmitManual);
-        Button btnIn = findViewById(R.id.btnIn);
-        Button btnOut = findViewById(R.id.btnOut);
-        LinearLayout controls = findViewById(R.id.controlsLayout);
-        BottomNavigationView bottomNav = findViewById(R.id.bottomNav);
-
-        // Styling for the Professional Blue Look
-        btnSubmitManual.setBackgroundColor(Color.parseColor("#1e40af")); // Navy Blue
-        btnIn.setBackgroundColor(Color.parseColor("#3b82f6")); // Bright Blue
-        btnOut.setBackgroundColor(Color.parseColor("#94a3b8")); // Slate Grey (Inactive)
-
-        WebSettings webSettings = myWebView.getSettings();
-        webSettings.setJavaScriptEnabled(true);
-        webSettings.setDomStorageEnabled(true);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Attendance Pro Blue</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --primary-blue: #1e40af; --accent-blue: #3b82f6; --bg-light: #eff6ff; }
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #000; overflow: hidden; }
         
-        myWebView.setWebViewClient(new WebViewClient());
-        myWebView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onPermissionRequest(final PermissionRequest request) {
-                request.grant(request.getResources());
-            }
-        });
+        /* The Camera stays in the background */
+        #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
+        #reader { width: 100vw; height: 100vh; }
 
-        myWebView.loadUrl("https://everloungei-boop.github.io/qr-attendance/");
-
-        bottomNav.setOnItemSelectedListener(item -> {
-            String page;
-            int id = item.getItemId();
-            if (id == R.id.nav_scan) {
-                page = "scan";
-                controls.setVisibility(View.VISIBLE);
-            } else {
-                page = (id == R.id.nav_history) ? "history" : (id == R.id.nav_users) ? "users" : "settings";
-                controls.setVisibility(View.GONE);
-            }
-            myWebView.evaluateJavascript("javascript:navigate('" + page + "')", null);
-            return true;
-        });
-
-        btnIn.setOnClickListener(v -> {
-            myWebView.evaluateJavascript("javascript:setMode('IN')", null);
-            btnIn.setBackgroundColor(Color.parseColor("#3b82f6")); // Active Blue
-            btnOut.setBackgroundColor(Color.parseColor("#94a3b8")); // Inactive Grey
-        });
-
-        btnOut.setOnClickListener(v -> {
-            myWebView.evaluateJavascript("javascript:setMode('OUT')", null);
-            btnOut.setBackgroundColor(Color.parseColor("#1e40af")); // Active Navy
-            btnIn.setBackgroundColor(Color.parseColor("#94a3b8")); // Inactive Grey
-        });
-
-        btnSubmitManual.setOnClickListener(v -> {
-            String text = manualInput.getText().toString().trim();
-            if (!text.isEmpty()) {
-                myWebView.evaluateJavascript("javascript:handleManualScan('" + text + "')", null);
-                manualInput.setText(""); 
-            }
-        });
-
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1);
+        /* Scanning Flash Effect */
+        #flash-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(34, 197, 94, 0.5); /* Transparent Green */
+            z-index: 999; display: none; pointer-events: none;
         }
-    }
-}
+
+        /* Blue Theme Overlay Pages */
+        .page { 
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
+            display: none; padding: 20px; box-sizing: border-box; 
+            background: var(--bg-light); color: #1e293b; z-index: 10; overflow-y: auto; 
+        }
+        .page.active { display: block; }
+        
+        h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; }
+        .card { 
+            background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; 
+            border-left: 5px solid var(--accent-blue); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+        }
+        .status-badge { font-weight: bold; padding: 2px 8px; border-radius: 5px; font-size: 0.8em; }
+        .in { color: #059669; } .out { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <div id="flash-overlay"></div>
+    
+    <div id="scan-page"><div id="reader"></div></div>
+    
+    <div id="history-page" class="page">
+        <h3>📜 Scan History</h3>
+        <div id="historyContainer"></div>
+    </div>
+
+    <div id="users-page" class="page">
+        <h3>👥 API Configuration</h3>
+        <p>Google Apps Script URL:</p>
+        <input type="text" id="scriptUrl" style="width:100%; padding:12px; border: 1px solid #bfdbfe; border-radius:8px;" onchange="saveConfig()">
+    </div>
+
+    <div id="settings-page" class="page">
+        <h3>⚙️ Settings</h3>
+        <div class="card">
+            <p><strong>App Version:</strong> 2.0.0 Blue</p>
+            <button onclick="clearHistory()" style="color: #ef4444; border:none; background:none; cursor:pointer;">🗑️ Clear Data</button>
+        </div>
+    </div>
+
+    <script>
+        let scannerMode = "IN";
+        let html5QrCode;
+        let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
+
+        function navigate(pageName) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            if (pageName !== 'scan') {
+                document.getElementById(pageName + '-page').classList.add('active');
+                if (pageName === 'history') renderHistory();
+            }
+        }
+
+        function startScanner() {
+            if (html5QrCode) return;
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } }, onScanSuccess);
+        }
+
+        async function onScanSuccess(decodedText) {
+            // GREEN FLASH FEEDBACK
+            const flash = document.getElementById('flash-overlay');
+            flash.style.display = 'block';
+            setTimeout(() => { flash.style.display = 'none'; }, 400);
+
+            const entry = { qrContent: decodedText, status: scannerMode, time: new Date().toLocaleString() };
+            localHistory.unshift(entry);
+            localStorage.setItem('qr_history', JSON.stringify(localHistory));
+            
+            const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
+            if(url) fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
+
+            await html5QrCode.pause();
+            setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+            container.innerHTML = localHistory.map(h => `
+                <div class="card">
+                    <div style="font-size: 1.1em; font-weight: bold;">${h.qrContent}</div>
+                    <div style="margin-top:5px; font-size:0.85em; color:#64748b;">
+                        ${h.time} | <span class="status-badge ${h.status.toLowerCase()}">${h.status}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function saveConfig() { localStorage.setItem('api_url', document.getElementById('scriptUrl').value); }
+        function clearHistory() { if(confirm("Clear history?")) { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); } }
+
+        window.onload = () => {
+            document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
+            startScanner();
+        };
+    </script>
+</body>
+</html>
