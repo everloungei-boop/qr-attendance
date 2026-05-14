@@ -3,93 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Attendance Pro Elite</title>
+    <title>Attendance Pro Fixed</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root { --neon: #00f2ff; --bg: #0d1117; --card: #161b22; --border: #30363d; }
-        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; overflow: hidden; }
+        body { margin: 0; font-family: sans-serif; background: var(--bg); color: white; overflow: hidden; height: 100vh; }
         
         header { height: 50px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; }
         
-        /* Adjusted height to prevent overlap seen in image_a3d76e.jpg */
-        #scan-area { width: 100%; height: 250px; background: #000; position: relative; border-bottom: 1px solid var(--border); }
+        /* Fixed height for scanner area to leave room for manual input */
+        #scan-area { width: 100%; height: 240px; background: #000; position: relative; border-bottom: 1px solid var(--border); }
         #reader { width: 100%; height: 100%; }
-        #flash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(57, 211, 83, 0.5); opacity: 0; z-index: 10; pointer-events: none; transition: opacity 0.2s; }
+        #flash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(57, 211, 83, 0.4); opacity: 0; z-index: 10; pointer-events: none; }
 
-        #manual-section { padding: 15px; background: var(--bg); border-bottom: 1px solid var(--border); }
-        .input-row { display: flex; gap: 8px; margin-top: 5px; }
-        input { flex: 1; background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: white; font-size: 0.9rem; }
-        .btn-send { background: var(--neon); color: #000; border: none; border-radius: 8px; padding: 0 15px; font-weight: bold; cursor: pointer; }
+        /* Manual box is now strictly positioned to avoid the bottom overlap */
+        #manual-section { padding: 12px; background: var(--bg); }
+        .input-row { display: flex; gap: 8px; margin-top: 4px; }
+        input { flex: 1; background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: white; font-size: 1rem; }
+        .btn-send { background: var(--neon); color: #000; border: none; border-radius: 8px; padding: 0 18px; font-weight: bold; }
 
-        nav { position: fixed; bottom: 0; width: 100%; height: 65px; background: var(--card); border-top: 1px solid var(--border); display: flex; z-index: 1000; }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8b949e; text-decoration: none; cursor: pointer; }
+        /* Navigation */
+        nav { position: fixed; bottom: 0; width: 100%; height: 60px; background: var(--card); border-top: 1px solid var(--border); display: flex; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8b949e; font-size: 0.7rem; }
         .nav-item.active { color: var(--neon); }
-        .nav-icon { font-size: 1.2rem; margin-bottom: 2px; }
 
-        .page { position: fixed; top: 50px; left: 0; width: 100%; height: calc(100% - 115px); background: var(--bg); z-index: 500; padding: 15px; box-sizing: border-box; overflow-y: auto; display: none; }
+        /* Page content area */
+        .page-container { height: calc(100vh - 110px); overflow-y: auto; }
+        .page { padding: 15px; display: none; }
         .page.active { display: block; }
-        
-        .log-card { background: var(--card); padding: 10px; border-radius: 8px; margin-bottom: 8px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; }
-        .share-btn { width: 100%; background: #238636; color: white; border: none; padding: 12px; border-radius: 10px; font-weight: bold; margin-bottom: 15px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
 <header>
-    <div style="font-weight:900; color:var(--neon); font-size:0.9rem;">CORE_SCAN</div>
-    <div style="font-size: 0.7rem; opacity: 0.8;">SESSION: <span id="logCount">0</span></div>
+    <div style="font-weight:900; color:var(--neon)">CORE_SCAN</div>
+    <div style="font-size: 0.7rem;">LOGS: <span id="logCount">0</span></div>
 </header>
 
-<div id="scan-tab">
-    <div id="scan-area">
-        <div id="flash-overlay"></div>
-        <div id="reader"></div>
-    </div>
-    <!-- Manual section moved here to be visible immediately -->
-    <div id="manual-section">
-        <label style="color: var(--neon); font-size: 0.65rem; font-weight: bold; text-transform: uppercase;">Manual Encoding</label>
-        <div class="input-row">
-            <input type="text" id="manualText" placeholder="Enter name/barcode...">
-            <button class="btn-send" onclick="handleManual()">SEND</button>
+<div class="page-container">
+    <!-- SCANNER TAB -->
+    <div id="scan-tab" class="page active">
+        <div id="scan-area">
+            <div id="flash-overlay"></div>
+            <div id="reader"></div>
+        </div>
+        <div id="manual-section">
+            <label style="color: var(--neon); font-size: 0.7rem; font-weight: bold;">MANUAL ENCODING</label>
+            <div class="input-row">
+                <input type="text" id="manualText" placeholder="Enter data...">
+                <button class="btn-send" onclick="handleManual()">SEND</button>
+            </div>
         </div>
     </div>
-</div>
 
-<div id="history-page" class="page">
-    <button class="share-btn" onclick="shareLogs()">📤 SHARE RECORDS</button>
-    <div id="historyContent"></div>
-</div>
+    <!-- RECORDS TAB -->
+    <div id="history-tab" class="page">
+        <button onclick="shareLogs()" style="width:100%; background:#238636; color:white; border:none; padding:15px; border-radius:8px; font-weight:bold; margin-bottom:15px;">📤 SHARE RECORDS</button>
+        <div id="historyContent"></div>
+    </div>
 
-<div id="settings-page" class="page">
-    <h3 style="color:var(--neon); font-size:1.1rem;">SETTINGS</h3>
-    <div style="margin-bottom:12px;">
-        <label style="font-size:0.75rem; color:#8b949e;">Operator Name</label>
-        <input type="text" id="prefName" onchange="savePrefs()" style="width:100%;">
-    </div>
-    <div style="margin-bottom:12px;">
-        <label style="font-size:0.75rem; color:#8b949e;">Operator ID</label>
-        <input type="text" id="prefId" onchange="savePrefs()" style="width:100%;">
-    </div>
-    <div style="margin-bottom:20px;">
-        <label style="font-size:0.75rem; color:#8b949e;">Google Script URL</label>
-        <input type="text" id="prefUrl" onchange="savePrefs()" style="width:100%;">
+    <!-- SETTINGS TAB -->
+    <div id="settings-tab" class="page">
+        <h3 style="color:var(--neon)">SETTINGS</h3>
+        <label>Operator Name</label>
+        <input type="text" id="prefName" onchange="savePrefs()" style="width:100%; margin-bottom:15px;">
+        <label>Operator ID</label>
+        <input type="text" id="prefId" onchange="savePrefs()" style="width:100%; margin-bottom:15px;">
+        <label>Script URL</label>
+        <input type="text" id="prefUrl" onchange="savePrefs()" style="width:100%; margin-bottom:15px;">
     </div>
 </div>
 
 <nav>
-    <div class="nav-item active" onclick="switchTab('scan', this)">
-        <span class="nav-icon">⌖</span><span>SCANNER</span>
-    </div>
-    <div class="nav-item" onclick="switchTab('history', this)">
-        <span class="nav-icon">▤</span><span>RECORDS</span>
-    </div>
-    <div class="nav-item" onclick="switchTab('settings', this)">
-        <span class="nav-icon">⚙</span><span>SETTINGS</span>
-    </div>
+    <div class="nav-item active" onclick="switchTab('scan', this)"><span>⌖ SCANNER</span></div>
+    <div class="nav-item" onclick="switchTab('history', this)"><span>▤ RECORDS</span></div>
+    <div class="nav-item" onclick="switchTab('settings', this)"><span>⚙ SETTINGS</span></div>
 </nav>
 
 <script>
-    let currentMode = "IN"; 
+    let currentMode = "IN";
     let qrEngine = null;
     let localLogs = JSON.parse(localStorage.getItem('attendance_logs') || '[]');
 
@@ -97,16 +89,17 @@
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
         
-        document.getElementById('scan-tab').style.display = 'none';
-        document.getElementById('history-page').style.display = 'none';
-        document.getElementById('settings-page').style.display = 'none';
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(target + '-tab').classList.add('active');
 
         if(target === 'scan') {
-            document.getElementById('scan-tab').style.display = 'block';
             initCamera();
+            // Tell Android to SHOW buttons
+            if(window.Android) window.Android.toggleButtons(true);
         } else {
             killCamera();
-            document.getElementById(target + '-page').style.display = 'block';
+            // Tell Android to HIDE buttons
+            if(window.Android) window.Android.toggleButtons(false);
             if(target === 'history') renderLogs();
         }
     }
@@ -114,37 +107,23 @@
     function initCamera() {
         if(qrEngine) return;
         qrEngine = new Html5Qrcode("reader");
-        qrEngine.start({ facingMode: "environment" }, { fps: 20, qrbox: {width: 200, height: 120} }, processResult);
+        qrEngine.start({ facingMode: "environment" }, { fps: 15, qrbox: {width: 250, height: 150} }, processResult);
     }
 
-    function killCamera() {
-        if(qrEngine) {
-            qrEngine.stop().then(() => qrEngine = null);
-        }
-    }
+    function killCamera() { if(qrEngine) qrEngine.stop().then(() => qrEngine = null); }
 
     function handleManual() {
         const txt = document.getElementById('manualText').value;
-        if(txt.trim() !== "") {
-            processResult(txt);
-            document.getElementById('manualText').value = "";
-        }
+        if(txt) { processResult(txt); document.getElementById('manualText').value = ""; }
     }
 
     function processResult(text) {
         const flash = document.getElementById('flash-overlay');
-        flash.style.opacity = '1';
-        setTimeout(() => flash.style.opacity = '0', 300);
+        flash.style.opacity = '1'; setTimeout(() => flash.style.opacity = '0', 300);
 
         const name = localStorage.getItem('u_name') || "User";
-        const id = localStorage.getItem('u_id') || "N/A";
-        
-        const data = {
-            qr: text,
-            status: currentMode, // Captures IN or OUT correctly
-            user: `${name} (${id})`,
-            time: new Date().toLocaleString()
-        };
+        const id = localStorage.getItem('u_id') || "0";
+        const data = { qr: text, status: currentMode, user: `${name} (${id})`, time: new Date().toLocaleString() };
 
         localLogs.unshift(data);
         localStorage.setItem('attendance_logs', JSON.stringify(localLogs));
@@ -157,32 +136,16 @@
             body.append('status', data.status);
             body.append('scannedBy', data.user);
             body.append('time', data.time);
-            
             fetch(endpoint, { method: 'POST', mode: 'no-cors', body: body.toString() });
         }
-
-        if(qrEngine && qrEngine.getState() === 2) {
-            qrEngine.pause();
-            setTimeout(() => { if(qrEngine) qrEngine.resume(); }, 2000);
-        }
-    }
-
-    async function shareLogs() {
-        if (localLogs.length === 0) return;
-        let csv = "QR Content,Timestamp,Status,User ID\n";
-        localLogs.forEach(l => csv += `"${l.qr}","${l.time}","${l.status}","${l.user}"\n`);
-        const file = new File([csv], `Logs_${Date.now()}.csv`, { type: 'text/csv' });
-        if (navigator.share) await navigator.share({ files: [file], title: 'Attendance Logs' });
     }
 
     function renderLogs() {
-        const list = document.getElementById('historyContent');
-        list.innerHTML = localLogs.map(l => `
-            <div class="log-card">
-                <div><strong>${l.qr}</strong><br><small style="color:#8b949e">${l.time}</small></div>
-                <div style="font-weight:bold; color:${l.status==='IN'?'#39d353':'#f85149'}">${l.status}</div>
-            </div>
-        `).join('');
+        document.getElementById('historyContent').innerHTML = localLogs.map(l => `
+            <div style="background:var(--card); padding:10px; border-radius:8px; margin-bottom:8px; display:flex; justify-content:space-between; border:1px solid var(--border)">
+                <div><strong>${l.qr}</strong><br><small>${l.time}</small></div>
+                <div style="color:${l.status==='IN'?'#39d353':'#f85149'}"><b>${l.status}</b></div>
+            </div>`).join('');
     }
 
     function savePrefs() {
