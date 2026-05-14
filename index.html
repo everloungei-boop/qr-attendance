@@ -1,79 +1,95 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scanner Engine</title>
-    <script src="https://unpkg.com/html5-qrcode"></script>
-    <style>
-        body { margin: 0; font-family: sans-serif; background: #000; color: white; overflow: hidden; }
-        /* The scan page stays visible in the background */
-        #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; background: #000; }
-        /* Other pages slide over the camera */
-        .page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; padding: 20px; box-sizing: border-box; background: #f1f5f9; color: #1e293b; overflow-y: auto; z-index: 10; }
-        .page.active { display: block; }
-        #reader { width: 100vw; height: 100vh; }
-        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
-    </style>
-</head>
-<body>
-    <!-- Scan page is always there, just covered by other pages -->
-    <div id="scan-page"><div id="reader"></div></div>
-    
-    <div id="history-page" class="page"><h3 style="margin-top:0">Recent Scans</h3><div id="historyContainer"></div></div>
-    <div id="users-page" class="page"><h3>Configuration</h3><p>Script URL:</p><input type="text" id="scriptUrl" style="width:100%; padding:12px;" onchange="saveConfig()"></div>
-    <div id="settings-page" class="page"><h3>Settings</h3><div class="card"><button onclick="clearHistory()" style="color:red; border:none; background:none;">Clear Local History</button></div></div>
+package com.example.attendancescanner;
 
-    <script>
-        let scannerMode = "IN";
-        let html5QrCode;
-        let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Bundle;
+import android.view.View;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
-        function navigate(pageName) {
-            // Hide all overlay pages
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            
-            if (pageName === 'scan') {
-                // Just showing the background camera
-            } else {
-                // Show the requested overlay page
-                document.getElementById(pageName + '-page').classList.add('active');
-                if (pageName === 'history') renderHistory();
+public class MainActivity extends AppCompatActivity {
+
+    private WebView myWebView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        myWebView = findViewById(R.id.webview);
+        EditText manualInput = findViewById(R.id.manualInput);
+        Button btnSubmitManual = findViewById(R.id.btnSubmitManual);
+        Button btnIn = findViewById(R.id.btnIn);
+        Button btnOut = findViewById(R.id.btnOut);
+        LinearLayout controls = findViewById(R.id.controlsLayout);
+        BottomNavigationView bottomNav = findViewById(R.id.bottomNav);
+
+        // Styling for the Professional Blue Look
+        btnSubmitManual.setBackgroundColor(Color.parseColor("#1e40af")); // Navy Blue
+        btnIn.setBackgroundColor(Color.parseColor("#3b82f6")); // Bright Blue
+        btnOut.setBackgroundColor(Color.parseColor("#94a3b8")); // Slate Grey (Inactive)
+
+        WebSettings webSettings = myWebView.getSettings();
+        webSettings.setJavaScriptEnabled(true);
+        webSettings.setDomStorageEnabled(true);
+        
+        myWebView.setWebViewClient(new WebViewClient());
+        myWebView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                request.grant(request.getResources());
             }
+        });
+
+        myWebView.loadUrl("https://everloungei-boop.github.io/qr-attendance/");
+
+        bottomNav.setOnItemSelectedListener(item -> {
+            String page;
+            int id = item.getItemId();
+            if (id == R.id.nav_scan) {
+                page = "scan";
+                controls.setVisibility(View.VISIBLE);
+            } else {
+                page = (id == R.id.nav_history) ? "history" : (id == R.id.nav_users) ? "users" : "settings";
+                controls.setVisibility(View.GONE);
+            }
+            myWebView.evaluateJavascript("javascript:navigate('" + page + "')", null);
+            return true;
+        });
+
+        btnIn.setOnClickListener(v -> {
+            myWebView.evaluateJavascript("javascript:setMode('IN')", null);
+            btnIn.setBackgroundColor(Color.parseColor("#3b82f6")); // Active Blue
+            btnOut.setBackgroundColor(Color.parseColor("#94a3b8")); // Inactive Grey
+        });
+
+        btnOut.setOnClickListener(v -> {
+            myWebView.evaluateJavascript("javascript:setMode('OUT')", null);
+            btnOut.setBackgroundColor(Color.parseColor("#1e40af")); // Active Navy
+            btnIn.setBackgroundColor(Color.parseColor("#94a3b8")); // Inactive Grey
+        });
+
+        btnSubmitManual.setOnClickListener(v -> {
+            String text = manualInput.getText().toString().trim();
+            if (!text.isEmpty()) {
+                myWebView.evaluateJavascript("javascript:handleManualScan('" + text + "')", null);
+                manualInput.setText(""); 
+            }
+        });
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 1);
         }
-
-        function setMode(mode) { scannerMode = mode; }
-        function handleManualScan(text) { if(text) onScanSuccess(text); }
-
-        function startScanner() {
-            if (html5QrCode) return; // Don't start twice
-            html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } }, onScanSuccess);
-        }
-
-        async function onScanSuccess(decodedText) {
-            const entry = { qrContent: decodedText, status: scannerMode, time: new Date().toLocaleString() };
-            localHistory.unshift(entry);
-            localStorage.setItem('qr_history', JSON.stringify(localHistory));
-            const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
-            if(url) fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
-            
-            await html5QrCode.pause();
-            setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
-        }
-
-        function renderHistory() {
-            const container = document.getElementById('historyContainer');
-            container.innerHTML = localHistory.map(h => `<div class="card"><strong>${h.qrContent}</strong><br><small>${h.time} | ${h.status}</small></div>`).join('');
-        }
-
-        function saveConfig() { localStorage.setItem('api_url', document.getElementById('scriptUrl').value); }
-        function clearHistory() { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); }
-
-        window.onload = () => {
-            document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
-            startScanner();
-        };
-    </script>
-</body>
-</html>
+    }
+}
