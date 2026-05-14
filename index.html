@@ -6,21 +6,64 @@
     <title>Scanner Engine</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; }
+        body { margin: 0; font-family: sans-serif; background: #000; color: white; overflow-x: hidden; }
+        .page { display: none; padding: 20px; height: 100vh; box-sizing: border-box; background: #f1f5f9; color: #1e293b; overflow-y: auto; }
+        .page.active { display: block; }
+        #scan-page { padding: 0; background: #000; }
         #reader { width: 100vw; height: 100vh; }
-        /* Hide all html5-qrcode UI elements we don't need */
-        #reader__dashboard, #reader__status_span { display: none !important; }
-        video { object-fit: cover !important; }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
-    <div id="reader"></div>
+
+    <!-- 1. SCAN PAGE -->
+    <div id="scan-page" class="page active">
+        <div id="reader"></div>
+    </div>
+
+    <!-- 2. HISTORY PAGE -->
+    <div id="history-page" class="page">
+        <h3 style="margin-top:0">Recent Scans</h3>
+        <div id="historyContainer"></div>
+    </div>
+
+    <!-- 3. USERS PAGE -->
+    <div id="users-page" class="page">
+        <h3>Configuration</h3>
+        <p>Google Script URL:</p>
+        <input type="text" id="scriptUrl" style="width:100%; padding:10px;" onchange="saveConfig()">
+    </div>
+
+    <!-- 4. SETTINGS PAGE -->
+    <div id="settings-page" class="page">
+        <h3>Settings</h3>
+        <div class="card">
+            <button onclick="clearHistory()" style="color: red;">Clear Local History</button>
+        </div>
+    </div>
+
     <script>
         let scannerMode = "IN";
         let html5QrCode;
+        let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
+
+        // --- NAVIGATION LOGIC ---
+        function navigate(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            // Show the selected one
+            document.getElementById(pageName + '-page').classList.add('active');
+            
+            // Manage scanner battery/performance
+            if (pageName === 'scan') {
+                if (!html5QrCode) startScanner();
+            } else {
+                if (html5QrCode) html5QrCode.stop();
+                if (pageName === 'history') renderHistory();
+            }
+        }
 
         function setMode(mode) { scannerMode = mode; }
-
         function handleManualScan(text) { if(text) onScanSuccess(text); }
 
         function startScanner() {
@@ -40,18 +83,35 @@
                 time: new Date().toLocaleString()
             };
             
-            // This sends the data to your Google Sheet
-            const url = localStorage.getItem('api_url');
+            localHistory.unshift(entry);
+            localStorage.setItem('qr_history', JSON.stringify(localHistory));
+
+            const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
             if(url) {
                 fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
             }
 
-            // Pause briefly to show it worked
             await html5QrCode.pause();
-            setTimeout(() => { html5QrCode.resume(); }, 2000);
+            setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
         }
 
-        window.onload = startScanner;
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+            container.innerHTML = localHistory.map(h => `
+                <div class="card">
+                    <strong>${h.qrContent}</strong><br>
+                    <small>${h.time} | ${h.status}</small>
+                </div>
+            `).join('');
+        }
+
+        function saveConfig() { localStorage.setItem('api_url', document.getElementById('scriptUrl').value); }
+        function clearHistory() { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); }
+
+        window.onload = () => {
+            document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
+            startScanner();
+        };
     </script>
 </body>
 </html>
