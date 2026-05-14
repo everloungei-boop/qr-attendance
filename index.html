@@ -3,113 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Attendance Pro</title>
+    <title>Scanner Engine</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --primary: #2563eb; --in-color: #10b981; --out-color: #f43f5e; --bg: #f1f5f9; }
-        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg); color: #1e293b; overflow: hidden; }
-        
-        /* Hides the mode buttons on web so the Android buttons take over */
-        .mode-selector { display: none; } 
-
-        .page { display: none; padding: 10px; height: 100vh; box-sizing: border-box; }
-        .page.active { display: block; }
-
-        /* Scanner fills the CardView in Android */
-        #reader { width: 100%; height: 100%; border-radius: 12px; overflow: hidden; background: black; }
-
-        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; position: relative; }
-        .sync-badge { position: absolute; top: 15px; right: 15px; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
-        .synced { background: #dcfce7; color: #166534; }
-        .pending { background: #fef9c3; color: #854d0e; }
-
-        /* Hide nav bar if using Android native tabs */
-        .nav-bottom { display: none; }
+        body { margin: 0; background: #000; overflow: hidden; }
+        #reader { width: 100vw; height: 100vh; }
+        /* Hide all html5-qrcode UI elements we don't need */
+        #reader__dashboard, #reader__status_span { display: none !important; }
+        video { object-fit: cover !important; }
     </style>
 </head>
 <body>
-
-    <!-- SCAN PAGE -->
-    <div id="scan" class="page active">
-        <div id="reader"></div>
-        <div id="last-scan-status" style="text-align:center; margin-top:10px; font-weight:bold; color: var(--in-color);"></div>
-    </div>
-
+    <div id="reader"></div>
     <script>
         let scannerMode = "IN";
         let html5QrCode;
-        let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
 
-        // --- ANDROID INTERFACE FUNCTIONS ---
+        function setMode(mode) { scannerMode = mode; }
 
-        // Called by Android btnIn/btnOut
-        function setMode(mode) {
-            scannerMode = mode;
-            console.log("Mode changed to: " + mode);
-        }
-
-        // Called by Android btnSubmitManual
-        function handleManualScan(text) {
-            if(text) onScanSuccess(text);
-        }
-
-        // --- CORE LOGIC ---
+        function handleManualScan(text) { if(text) onScanSuccess(text); }
 
         function startScanner() {
             html5QrCode = new Html5Qrcode("reader");
             html5QrCode.start(
                 { facingMode: "environment" }, 
-                { fps: 25, qrbox: { width: 250, height: 250 } },
+                { fps: 20, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } },
                 onScanSuccess
-            ).catch(err => console.error("Scanner error:", err));
+            ).catch(err => console.error(err));
         }
 
         async function onScanSuccess(decodedText) {
-            document.getElementById('last-scan-status').innerHTML = "✅ SCANNED: " + decodedText;
-            
-            const newEntry = {
+            const entry = {
                 qrContent: decodedText,
-                time: new Date().toLocaleString(),
                 status: scannerMode,
-                userId: "Guest_User", // Can be updated via Android
-                synced: false
+                userId: "App_User",
+                time: new Date().toLocaleString()
             };
-
-            localHistory.unshift(newEntry);
-            localStorage.setItem('qr_history', JSON.stringify(localHistory));
             
-            sendDataToSheet(newEntry);
-            
-            // Pause to prevent double-scans
-            if(html5QrCode && html5QrCode.getState() === 2) {
-                await html5QrCode.pause();
-                setTimeout(() => {
-                    html5QrCode.resume();
-                    document.getElementById('last-scan-status').innerText = "";
-                }, 2000);
-            }
-        }
-
-        async function sendDataToSheet(entry) {
+            // This sends the data to your Google Sheet
             const url = localStorage.getItem('api_url');
-            if(!url) return;
-
-            try {
-                await fetch(url, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    body: JSON.stringify(entry)
-                });
-                entry.synced = true;
-                localStorage.setItem('qr_history', JSON.stringify(localHistory));
-            } catch (error) {
-                console.error("Sync Error:", error);
+            if(url) {
+                fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
             }
+
+            // Pause briefly to show it worked
+            await html5QrCode.pause();
+            setTimeout(() => { html5QrCode.resume(); }, 2000);
         }
 
-        window.onload = () => {
-            startScanner();
-        };
+        window.onload = startScanner;
     </script>
 </body>
 </html>
