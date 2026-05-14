@@ -8,42 +8,15 @@
     <style>
         :root { --primary-blue: #1e40af; --accent-blue: #3b82f6; --bg-light: #eff6ff; }
         body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #000; overflow: hidden; }
-        
         #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; }
         #reader { width: 100vw; height: 100vh; }
         #flash-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(34, 197, 94, 0.5); z-index: 999; display: none; pointer-events: none; }
-
-        .page { 
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; 
-            display: none; padding: 20px; box-sizing: border-box; 
-            background: var(--bg-light); color: #1e293b; z-index: 10; overflow-y: auto; 
-        }
+        .page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; padding: 20px; box-sizing: border-box; background: var(--bg-light); color: #1e293b; z-index: 10; overflow-y: auto; }
         .page.active { display: block; }
-        
         h3 { color: var(--primary-blue); border-bottom: 2px solid var(--accent-blue); padding-bottom: 8px; margin-top: 0; }
-        
-        /* Fixed Input Styling to prevent overlapping in image_b090fb.png */
-        input[type="text"] { 
-            width: 100%; 
-            padding: 12px; 
-            border: 1px solid #bfdbfe; 
-            border-radius: 8px; 
-            box-sizing: border-box; /* THIS FIXES THE OVERLAP */
-            margin-top: 10px;
-        }
-
-        .card { 
-            background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; 
-            border-left: 5px solid var(--accent-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-
-        .btn-google {
-            background: white; color: #444; border: 1px solid #ddd;
-            padding: 10px; border-radius: 5px; width: 100%; font-weight: bold;
-            display: flex; align-items: center; justify-content: center; cursor: pointer;
-        }
-        .user-info { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-        #user-photo { width: 40px; height: 40px; border-radius: 50%; background: #ccc; }
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #bfdbfe; border-radius: 8px; box-sizing: border-box; margin-top: 5px; margin-bottom: 15px; }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid var(--accent-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .btn-save { background: var(--primary-blue); color: white; border: none; padding: 10px 20px; border-radius: 8px; width: 100%; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -56,36 +29,24 @@
     </div>
 
     <div id="users-page" class="page">
-        <h3>👥 API Configuration</h3>
-        <label>Google Apps Script URL:</label>
-        <input type="text" id="scriptUrl" placeholder="Paste URL here..." onchange="saveConfig()">
+        <h3>👥 Profile & API</h3>
+        <div class="card">
+            <label><strong>Your Name:</strong></label>
+            <input type="text" id="userName" placeholder="Enter your full name" onchange="saveProfile()">
+            <label><strong>Staff ID:</strong></label>
+            <input type="text" id="userId" placeholder="Enter your Employee ID" onchange="saveProfile()">
+        </div>
+        <div class="card">
+            <label><strong>Google Apps Script URL:</strong></label>
+            <input type="text" id="scriptUrl" placeholder="Paste Script URL here" onchange="saveProfile()">
+        </div>
+        <button class="btn-save" onclick="alert('Profile Updated!')">Save All Settings</button>
     </div>
 
     <div id="settings-page" class="page">
         <h3>⚙️ Settings</h3>
-        
-        <div class="card">
-            <p style="margin:0; font-weight:bold; color:var(--primary-blue);">Account Management</p>
-            <div id="auth-section" style="margin-top:10px;">
-                <button class="btn-google" onclick="googleLogin()">
-                    Sign in with Google
-                </button>
-            </div>
-            <div id="profile-section" style="display:none;">
-                <div class="user-info">
-                    <div id="user-photo"></div>
-                    <div>
-                        <div id="user-name" style="font-weight:bold;">User Name</div>
-                        <div id="user-email" style="font-size:0.8em; color:#666;">user@gmail.com</div>
-                    </div>
-                </div>
-                <button onclick="googleLogout()" style="margin-top:10px; color:red; border:none; background:none; font-size:0.8em;">Sign Out</button>
-            </div>
-        </div>
-
-        <div class="card">
-            <button onclick="clearHistory()" style="color: #ef4444; border:none; background:none; font-weight:bold; width:100%; text-align:left;">🗑️ Clear Local History</button>
-        </div>
+        <div class="card"><p><strong>App Version:</strong> 2.1.0 Blue</p></div>
+        <div class="card"><button onclick="clearHistory()" style="color:red; border:none; background:none; font-weight:bold;">🗑️ Clear Local History</button></div>
     </div>
 
     <script>
@@ -98,35 +59,16 @@
             if (pageName !== 'scan') {
                 document.getElementById(pageName + '-page').classList.add('active');
                 if (pageName === 'history') renderHistory();
-                checkAuthStatus();
             }
         }
 
-        // GOOGLE AUTH SIMULATION (For WebView)
-        function googleLogin() {
-            // In a real app, this would redirect to Google OAuth. 
-            // For now, it simulates a successful login.
-            const dummyUser = { name: "Admin User", email: "admin@yourdomain.com" };
-            localStorage.setItem('user', JSON.stringify(dummyUser));
-            checkAuthStatus();
+        function setMode(mode) { 
+            scannerMode = mode; 
+            console.log("Mode changed to: " + mode);
         }
 
-        function googleLogout() {
-            localStorage.removeItem('user');
-            checkAuthStatus();
-        }
-
-        function checkAuthStatus() {
-            const user = JSON.parse(localStorage.getItem('user'));
-            if(user) {
-                document.getElementById('auth-section').style.display = 'none';
-                document.getElementById('profile-section').style.display = 'block';
-                document.getElementById('user-name').innerText = user.name;
-                document.getElementById('user-email').innerText = user.email;
-            } else {
-                document.getElementById('auth-section').style.display = 'block';
-                document.getElementById('profile-section').style.display = 'none';
-            }
+        function handleManualScan(text) { 
+            if(text) onScanSuccess(text); 
         }
 
         function startScanner() {
@@ -140,22 +82,29 @@
             flash.style.display = 'block';
             setTimeout(() => { flash.style.display = 'none'; }, 400);
 
-            const user = JSON.parse(localStorage.getItem('user'));
+            const name = localStorage.getItem('user_name') || "Unknown User";
+            const uid = localStorage.getItem('user_id') || "Guest";
+
             const entry = { 
                 qrContent: decodedText, 
                 status: scannerMode, 
-                scannedBy: user ? user.email : "Guest",
+                scannedBy: name + " (" + uid + ")",
                 time: new Date().toLocaleString() 
             };
             
             localHistory.unshift(entry);
             localStorage.setItem('qr_history', JSON.stringify(localHistory));
             
-            const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
-            if(url) fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
+            const url = localStorage.getItem('api_url');
+            if(url) {
+                fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) })
+                .catch(err => console.log("Fetch error:", err));
+            }
 
-            await html5QrCode.pause();
-            setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
+            if (html5QrCode && html5QrCode.getState() === 2) {
+                await html5QrCode.pause();
+                setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
+            }
         }
 
         function renderHistory() {
@@ -164,20 +113,25 @@
                 <div class="card">
                     <div style="font-weight: bold;">${h.qrContent}</div>
                     <div style="font-size:0.8em; color:#64748b; margin-top:4px;">
-                        ${h.time} | <strong>${h.status}</strong><br>
-                        By: ${h.scannedBy}
+                        ${h.time} | <strong>${h.status}</strong><br>By: ${h.scannedBy}
                     </div>
                 </div>
             `).join('');
         }
 
-        function saveConfig() { localStorage.setItem('api_url', document.getElementById('scriptUrl').value); }
+        function saveProfile() {
+            localStorage.setItem('user_name', document.getElementById('userName').value);
+            localStorage.setItem('user_id', document.getElementById('userId').value);
+            localStorage.setItem('api_url', document.getElementById('scriptUrl').value);
+        }
+
         function clearHistory() { if(confirm("Clear history?")) { localStorage.removeItem('qr_history'); localHistory = []; renderHistory(); } }
 
         window.onload = () => {
+            document.getElementById('userName').value = localStorage.getItem('user_name') || "";
+            document.getElementById('userId').value = localStorage.getItem('user_id') || "";
             document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
             startScanner();
-            checkAuthStatus();
         };
     </script>
 </body>
