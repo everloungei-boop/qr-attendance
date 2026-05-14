@@ -3,209 +3,212 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Attendance Pro Fixed</title>
+    <title>Attendance Pro Elite</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        :root { --neon-blue: #00f2ff; --bg-dark: #0d1117; --card: #161b22; --border: #30363d; }
-        body { margin: 0; font-family: -apple-system, sans-serif; background: var(--bg-dark); color: white; overflow: hidden; }
+        :root { --neon: #00f2ff; --bg: #0d1117; --card: #161b22; --border: #30363d; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: white; overflow: hidden; }
         
-        /* Fixed Header - Prevents camera overlap */
+        /* Layout Structure */
         header { height: 60px; background: var(--card); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; box-sizing: border-box; }
-        .logo { font-weight: bold; color: var(--neon-blue); letter-spacing: 1px; }
-
-        /* Scanner Area - Not Fullscreen */
-        #scan-container { width: 100%; height: 300px; background: #000; border-bottom: 1px solid var(--border); overflow: hidden; position: relative; }
+        #scan-area { width: 100%; height: 320px; background: #000; position: relative; border-bottom: 1px solid var(--border); }
         #reader { width: 100%; height: 100%; }
+        #flash-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(57, 211, 83, 0.5); opacity: 0; z-index: 10; pointer-events: none; transition: opacity 0.2s; }
 
-        /* Green Flash Feedback */
-        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(57, 211, 83, 0.6); opacity: 0; z-index: 10; pointer-events: none; transition: opacity 0.2s; }
+        /* Manual Input UI */
+        #manual-section { padding: 20px; background: var(--bg); }
+        .input-row { display: flex; gap: 10px; margin-top: 5px; }
+        input { flex: 1; background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 14px; color: white; font-size: 1rem; }
+        .btn-send { background: var(--neon); color: #000; border: none; border-radius: 8px; padding: 0 20px; font-weight: bold; cursor: pointer; }
 
-        /* Manual Input Section */
-        #manual-box { padding: 15px; background: var(--bg-dark); }
-        .input-group { display: flex; gap: 10px; }
-        input { flex: 1; background: #010409; border: 1px solid var(--border); border-radius: 6px; padding: 12px; color: white; }
-        .btn-send { background: var(--neon-blue); color: #000; border: none; border-radius: 6px; padding: 0 15px; font-weight: bold; }
+        /* Navigation */
+        nav { position: fixed; bottom: 0; width: 100%; height: 75px; background: var(--card); border-top: 1px solid var(--border); display: flex; z-index: 1000; }
+        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8b949e; text-decoration: none; cursor: pointer; }
+        .nav-item.active { color: var(--neon); }
+        .nav-icon { font-size: 1.5rem; margin-bottom: 3px; }
 
         /* Pages */
-        .page { position: fixed; top: 60px; left: 0; width: 100%; height: calc(100% - 130px); background: var(--bg-dark); z-index: 100; padding: 20px; box-sizing: border-box; overflow-y: auto; display: none; }
+        .page { position: fixed; top: 60px; left: 0; width: 100%; height: calc(100% - 135px); background: var(--bg); z-index: 500; padding: 20px; box-sizing: border-box; overflow-y: auto; display: none; }
         .page.active { display: block; }
-
-        /* Bottom Nav */
-        nav { position: fixed; bottom: 0; width: 100%; height: 70px; background: var(--card); border-top: 1px solid var(--border); display: flex; }
-        .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8b949e; font-size: 0.7rem; text-decoration: none; }
-        .nav-item.active { color: var(--neon-blue); }
-        .nav-icon { font-size: 1.4rem; margin-bottom: 2px; }
-
-        /* List Styling */
-        .row { background: var(--card); padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; }
-        .share-btn { width: 100%; background: #238636; color: white; border: none; padding: 15px; border-radius: 8px; font-weight: bold; margin-bottom: 20px; }
+        
+        .log-card { background: var(--card); padding: 12px; border-radius: 8px; margin-bottom: 10px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .share-btn { width: 100%; background: #238636; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: bold; margin-bottom: 20px; font-size: 1rem; }
     </style>
 </head>
 <body>
 
 <header>
-    <div class="logo">ATTENDANCE_PRO</div>
-    <div style="font-size: 0.8rem;">LOGS: <span id="count">0</span></div>
+    <div style="font-weight:900; color:var(--neon)">CORE_SCAN</div>
+    <div style="font-size: 0.8rem; opacity: 0.8;">SESSION: <span id="logCount">0</span></div>
 </header>
 
-<!-- SCAN TAB CONTENT -->
+<!-- MAIN SCAN TAB -->
 <div id="scan-tab">
-    <div id="scan-container">
-        <div id="flash"></div>
+    <div id="scan-area">
+        <div id="flash-overlay"></div>
         <div id="reader"></div>
     </div>
-    <div id="manual-box">
-        <label style="font-size: 0.7rem; color: var(--neon-blue); display: block; margin-bottom: 5px;">MANUAL DATA ENTRY</label>
-        <div class="input-group">
-            <input type="text" id="manualInput" placeholder="Enter barcode or name...">
-            <button class="btn-send" onclick="submitManual()">SEND</button>
+    <div id="manual-section">
+        <label style="color: var(--neon); font-size: 0.7rem; font-weight: bold; text-transform: uppercase;">Manual Entry</label>
+        <div class="input-row">
+            <input type="text" id="manualText" placeholder="Type name or code...">
+            <button class="btn-send" onclick="handleManual()">SUBMIT</button>
         </div>
     </div>
 </div>
 
 <!-- HISTORY TAB -->
 <div id="history-page" class="page">
-    <button class="share-btn" onclick="shareLogs()">📤 SHARE LOGS (WHATSAPP/ETC)</button>
-    <div id="historyList"></div>
+    <button class="share-btn" onclick="shareLogs()">SHARE DATA (WHATSAPP/FB)</button>
+    <div id="historyContent"></div>
 </div>
 
 <!-- SETTINGS TAB -->
 <div id="settings-page" class="page">
-    <h3>CONFIG</h3>
-    <label>Your Name</label>
-    <input type="text" id="userName" onchange="save()" style="width:100%; margin-bottom:15px;">
-    <label>Your ID</label>
-    <input type="text" id="userId" onchange="save()" style="width:100%; margin-bottom:15px;">
-    <label>Apps Script URL</label>
-    <input type="text" id="apiURL" onchange="save()" style="width:100%; margin-bottom:15px;">
-    <button onclick="localStorage.clear(); location.reload();" style="color:red; background:none; border:1px solid red; padding:5px; border-radius:4px;">Clear All Data</button>
+    <h3 style="color:var(--neon)">CONFIGURATION</h3>
+    <div style="margin-bottom:15px;">
+        <label style="font-size:0.8rem; color:#8b949e;">Staff Name</label>
+        <input type="text" id="prefName" onchange="savePrefs()" style="width:100%;">
+    </div>
+    <div style="margin-bottom:15px;">
+        <label style="font-size:0.8rem; color:#8b949e;">Staff ID</label>
+        <input type="text" id="prefId" onchange="savePrefs()" style="width:100%;">
+    </div>
+    <div style="margin-bottom:25px;">
+        <label style="font-size:0.8rem; color:#8b949e;">Script Web App URL</label>
+        <input type="text" id="prefUrl" onchange="savePrefs()" style="width:100%;" placeholder="https://script.google.com/...">
+    </div>
+    <button onclick="localStorage.clear(); location.reload();" style="background:none; border:1px solid #f85149; color:#f85149; padding:10px; border-radius:6px; width:100%;">Hard Reset App</button>
 </div>
 
 <nav>
-    <div class="nav-item active" onclick="nav('scan', this)">
-        <span class="nav-icon">⌖</span><span>SCAN</span>
+    <div class="nav-item active" onclick="switchTab('scan', this)">
+        <span class="nav-icon">⌖</span><span>SCANNER</span>
     </div>
-    <div class="nav-item" onclick="nav('history', this)">
-        <span class="nav-icon">▤</span><span>LOGS</span>
+    <div class="nav-item" onclick="switchTab('history', this)">
+        <span class="nav-icon">▤</span><span>RECORDS</span>
     </div>
-    <div class="nav-item" onclick="nav('settings', this)">
-        <span class="nav-icon">⚙</span><span>SET</span>
+    <div class="nav-item" onclick="switchTab('settings', this)">
+        <span class="nav-icon">⚙</span><span>SETTINGS</span>
     </div>
 </nav>
 
 <script>
-    let currentMode = "IN";
-    let html5QrCode = null;
-    let logs = JSON.parse(localStorage.getItem('logs') || '[]');
+    let currentMode = "IN"; // Controlled by Android Buttons
+    let qrEngine = null;
+    let localLogs = JSON.parse(localStorage.getItem('attendance_logs') || '[]');
 
-    function nav(tab, el) {
+    function switchTab(target, el) {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
         
-        // Hide all
         document.getElementById('scan-tab').style.display = 'none';
         document.getElementById('history-page').style.display = 'none';
         document.getElementById('settings-page').style.display = 'none';
 
-        if(tab === 'scan') {
+        if(target === 'scan') {
             document.getElementById('scan-tab').style.display = 'block';
-            startScanner();
+            initCamera();
         } else {
-            stopScanner();
-            document.getElementById(tab + '-page').style.display = 'block';
-            if(tab === 'history') updateList();
+            killCamera();
+            document.getElementById(target + '-page').style.display = 'block';
+            if(target === 'history') renderLogs();
         }
     }
 
-    function startScanner() {
-        if(html5QrCode) return;
-        html5QrCode = new Html5Qrcode("reader");
-        html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: 200 }, onScanSuccess);
+    function initCamera() {
+        if(qrEngine) return;
+        qrEngine = new Html5Qrcode("reader");
+        qrEngine.start({ facingMode: "environment" }, { fps: 20, qrbox: 220 }, processResult);
     }
 
-    function stopScanner() {
-        if(html5QrCode) {
-            html5QrCode.stop().then(() => html5QrCode = null);
+    function killCamera() {
+        if(qrEngine) {
+            qrEngine.stop().then(() => qrEngine = null);
         }
     }
 
-    function submitManual() {
-        const val = document.getElementById('manualInput').value;
-        if(val) {
-            onScanSuccess(val);
-            document.getElementById('manualInput').value = "";
+    function handleManual() {
+        const txt = document.getElementById('manualText').value;
+        if(txt.trim() !== "") {
+            processResult(txt);
+            document.getElementById('manualText').value = "";
         }
     }
 
-    function onScanSuccess(text) {
-        // Green Flash
-        const f = document.getElementById('flash');
-        f.style.opacity = '1';
-        setTimeout(() => f.style.opacity = '0', 300);
+    function processResult(text) {
+        // Visual Feedback (Green Flash)
+        const flash = document.getElementById('flash-overlay');
+        flash.style.opacity = '1';
+        setTimeout(() => flash.style.opacity = '0', 300);
 
-        const name = localStorage.getItem('user_name') || "User";
-        const id = localStorage.getItem('user_id') || "000";
+        const name = localStorage.getItem('u_name') || "User";
+        const id = localStorage.getItem('u_id') || "N/A";
         
-        const entry = {
+        const data = {
             qr: text,
             status: currentMode,
-            by: `${name} (${id})`,
+            user: `${name} (${id})`,
             time: new Date().toLocaleString()
         };
 
-        logs.unshift(entry);
-        localStorage.setItem('logs', JSON.stringify(logs));
-        document.getElementById('count').innerText = logs.length;
+        localLogs.unshift(data);
+        localStorage.setItem('attendance_logs', JSON.stringify(localLogs));
+        document.getElementById('logCount').innerText = localLogs.length;
 
-        // API Call
-        const url = localStorage.getItem('api_url');
-        if(url) {
-            const fd = new URLSearchParams();
-            fd.append('qrContent', entry.qr);
-            fd.append('status', entry.status);
-            fd.append('scannedBy', entry.by);
-            fd.append('time', entry.time);
-            fetch(url, { method: 'POST', mode: 'no-cors', body: fd.toString() });
+        // SEND TO GOOGLE
+        const endpoint = localStorage.getItem('u_url');
+        if(endpoint) {
+            const body = new URLSearchParams();
+            body.append('qrContent', data.qr);
+            body.append('status', data.status);
+            body.append('scannedBy', data.user);
+            body.append('time', data.time);
+            
+            fetch(endpoint, { method: 'POST', mode: 'no-cors', body: body.toString() });
         }
 
-        if(html5QrCode && html5QrCode.getState() === 2) {
-            html5QrCode.pause();
-            setTimeout(() => html5QrCode.resume(), 2000);
+        if(qrEngine && qrEngine.getState() === 2) {
+            qrEngine.pause();
+            setTimeout(() => { if(qrEngine) qrEngine.resume(); }, 1500);
         }
     }
 
     async function shareLogs() {
-        if (logs.length === 0) return alert("Empty");
+        if (localLogs.length === 0) return alert("No logs found");
         let csv = "QR Content,Timestamp,Status,User ID\n";
-        logs.forEach(l => csv += `"${l.qr}","${l.time}","${l.status}","${l.by}"\n`);
-        const file = new File([csv], 'logs.csv', { type: 'text/csv' });
+        localLogs.forEach(l => csv += `"${l.qr}","${l.time}","${l.status}","${l.user}"\n`);
+        
+        const file = new File([csv], `Export_${Date.now()}.csv`, { type: 'text/csv' });
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], title: 'Attendance' });
-        } else { alert("Sharing not supported"); }
+            await navigator.share({ files: [file], title: 'Attendance Logs' });
+        } else {
+            alert("Native sharing not available. Try another browser.");
+        }
     }
 
-    function updateList() {
-        const container = document.getElementById('historyList');
-        container.innerHTML = logs.map(l => `
-            <div class="row">
-                <div><strong>${l.qr}</strong><br><small>${l.time}</small></div>
-                <div style="color:${l.status==='IN'?'#39d353':'#f85149'}"><b>${l.status}</b></div>
+    function renderLogs() {
+        const list = document.getElementById('historyContent');
+        list.innerHTML = localLogs.map(l => `
+            <div class="log-card">
+                <div><strong>${l.qr}</strong><br><small style="color:#8b949e">${l.time}</small></div>
+                <div style="font-weight:bold; color:${l.status==='IN'?'#39d353':'#f85149'}">${l.status}</div>
             </div>
         `).join('');
     }
 
-    function save() {
-        localStorage.setItem('user_name', document.getElementById('userName').value);
-        localStorage.setItem('user_id', document.getElementById('userId').value);
-        localStorage.setItem('api_url', document.getElementById('apiURL').value);
+    function savePrefs() {
+        localStorage.setItem('u_name', document.getElementById('prefName').value);
+        localStorage.setItem('u_id', document.getElementById('prefId').value);
+        localStorage.setItem('u_url', document.getElementById('prefUrl').value);
     }
 
     window.onload = () => {
-        document.getElementById('userName').value = localStorage.getItem('user_name') || "";
-        document.getElementById('userId').value = localStorage.getItem('user_id') || "";
-        document.getElementById('apiURL').value = localStorage.getItem('api_url') || "";
-        document.getElementById('count').innerText = logs.length;
-        startScanner();
+        document.getElementById('prefName').value = localStorage.getItem('u_name') || "";
+        document.getElementById('prefId').value = localStorage.getItem('u_id') || "";
+        document.getElementById('prefUrl').value = localStorage.getItem('u_url') || "";
+        document.getElementById('logCount').innerText = localLogs.length;
+        initCamera();
     };
 </script>
 </body>
