@@ -6,16 +6,20 @@
     <title>Scanner Engine</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
-        body { margin: 0; font-family: sans-serif; background: #000; color: white; overflow-x: hidden; }
-        .page { display: none; padding: 20px; height: 100vh; box-sizing: border-box; background: #f1f5f9; color: #1e293b; overflow-y: auto; }
+        body { margin: 0; font-family: sans-serif; background: #000; color: white; overflow: hidden; }
+        /* The scan page stays visible in the background */
+        #scan-page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 1; background: #000; }
+        /* Other pages slide over the camera */
+        .page { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; display: none; padding: 20px; box-sizing: border-box; background: #f1f5f9; color: #1e293b; overflow-y: auto; z-index: 10; }
         .page.active { display: block; }
-        #scan-page { padding: 0; background: #000; }
         #reader { width: 100vw; height: 100vh; }
         .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; }
     </style>
 </head>
 <body>
-    <div id="scan-page" class="page active"><div id="reader"></div></div>
+    <!-- Scan page is always there, just covered by other pages -->
+    <div id="scan-page"><div id="reader"></div></div>
+    
     <div id="history-page" class="page"><h3 style="margin-top:0">Recent Scans</h3><div id="historyContainer"></div></div>
     <div id="users-page" class="page"><h3>Configuration</h3><p>Script URL:</p><input type="text" id="scriptUrl" style="width:100%; padding:12px;" onchange="saveConfig()"></div>
     <div id="settings-page" class="page"><h3>Settings</h3><div class="card"><button onclick="clearHistory()" style="color:red; border:none; background:none;">Clear Local History</button></div></div>
@@ -25,22 +29,16 @@
         let html5QrCode;
         let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
 
-        async function navigate(pageName) {
+        function navigate(pageName) {
+            // Hide all overlay pages
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(pageName + '-page').classList.add('active');
             
-            if (html5QrCode) {
-                try { 
-                    await html5QrCode.stop(); 
-                    html5QrCode.clear(); 
-                } catch (e) { console.log(e); }
-                html5QrCode = null;
-            }
-
             if (pageName === 'scan') {
-                setTimeout(startScanner, 300);
-            } else if (pageName === 'history') {
-                renderHistory();
+                // Just showing the background camera
+            } else {
+                // Show the requested overlay page
+                document.getElementById(pageName + '-page').classList.add('active');
+                if (pageName === 'history') renderHistory();
             }
         }
 
@@ -48,9 +46,9 @@
         function handleManualScan(text) { if(text) onScanSuccess(text); }
 
         function startScanner() {
+            if (html5QrCode) return; // Don't start twice
             html5QrCode = new Html5Qrcode("reader");
-            html5QrCode.start({ facingMode: "environment" }, { fps: 15, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } }, onScanSuccess)
-            .catch(err => setTimeout(startScanner, 1500));
+            html5QrCode.start({ facingMode: "environment" }, { fps: 20, qrbox: (w, h) => { return { width: w * 0.8, height: h * 0.4 } } }, onScanSuccess);
         }
 
         async function onScanSuccess(decodedText) {
@@ -59,6 +57,7 @@
             localStorage.setItem('qr_history', JSON.stringify(localHistory));
             const url = localStorage.getItem('api_url') || document.getElementById('scriptUrl').value;
             if(url) fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(entry) });
+            
             await html5QrCode.pause();
             setTimeout(() => { if(html5QrCode) html5QrCode.resume(); }, 2000);
         }
