@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Attendance Pro</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --primary: #2563eb; --in-color: #10b981; --out-color: #f43f5e; --bg: #f1f5f9; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: var(--bg); color: #1e293b; }
+        
+        /* Navigation */
+        .nav-bottom { position: fixed; bottom: 0; width: 100%; background: white; display: flex; height: 65px; border-top: 1px solid #e2e8f0; z-index: 100; }
+        .nav-item { flex: 1; border: none; background: none; font-size: 12px; color: #64748b; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .nav-item.active { color: var(--primary); font-weight: bold; }
+
+        /* Pages */
+        .page { display: none; padding: 20px; padding-bottom: 90px; height: 100vh; box-sizing: border-box; overflow-y: auto; }
+        .page.active { display: block; }
+
+        /* Scanner Specifics */
+        .mode-selector { display: flex; gap: 10px; margin-bottom: 15px; }
+        .mode-btn { flex: 1; padding: 15px; border: 2px solid #cbd5e1; border-radius: 12px; background: white; font-weight: bold; font-size: 1.1em; transition: 0.2s; }
+        .mode-btn.selected-in { border-color: var(--in-color); background: var(--in-color); color: white; }
+        .mode-btn.selected-out { border-color: var(--out-color); background: var(--out-color); color: white; }
+        #reader { width: 100%; border-radius: 15px; overflow: hidden; background: black; }
+
+        /* Cards */
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #e2e8f0; position: relative; }
+        .sync-badge { position: absolute; top: 15px; right: 15px; font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+        .synced { background: #dcfce7; color: #166534; }
+        .pending { background: #fef9c3; color: #854d0e; }
+
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <!-- SCAN PAGE -->
+    <div id="scan" class="page active">
+        <div class="mode-selector">
+            <button id="btnIn" class="mode-btn selected-in" onclick="setMode('IN')">MODE: IN</button>
+            <button id="btnOut" class="mode-btn" onclick="setMode('OUT')">MODE: OUT</button>
+        </div>
+        <div id="reader"></div>
+        <div id="last-scan-status" style="text-align:center; margin-top:15px; font-weight:bold;"></div>
+    </div>
+
+    <!-- HISTORY PAGE -->
+    <div id="history" class="page">
+        <h3>Recent Scans</h3>
+        <div id="historyContainer"></div>
+    </div>
+
+    <!-- USERS PAGE -->
+    <div id="users" class="page">
+        <h3>API Configuration</h3>
+        <p style="font-size: 0.9em; color: #64748b;">Paste your Google Apps Script URL below:</p>
+        <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/..." onchange="saveConfig()">
+        <hr>
+        <div id="userInfoDisplay">
+            <strong>Logged User:</strong> <span id="userIdLabel">Guest_User</span>
+        </div>
+    </div>
+
+    <!-- SETTINGS PAGE -->
+    <div id="settings" class="page">
+        <h3>Account Management</h3>
+        <div class="card">
+            <p><strong>App Version:</strong> 1.0.0 Online</p>
+            <button onclick="clearHistory()" style="color: red; border:none; background:none; padding:0;">Clear History</button>
+        </div>
+        <button class="mode-btn" onclick="location.reload()" style="background:#64748b; color:white; width:100%;">Log Out / Refresh</button>
+    </div>
+
+    <nav class="nav-bottom">
+        <button class="nav-item active" onclick="navigate('scan', this)"><span>📷</span>Scan</button>
+        <button class="nav-item" onclick="navigate('history', this)"><span>📜</span>History</button>
+        <button class="nav-item" onclick="navigate('users', this)"><span>👥</span>Users</button>
+        <button class="nav-item" onclick="navigate('settings', this)"><span>⚙️</span>Settings</button>
+    </nav>
+
+    <script>
+        let scannerMode = "IN";
+        let html5QrCode;
+        let localHistory = JSON.parse(localStorage.getItem('qr_history') || '[]');
+
+        function setMode(mode) {
+            scannerMode = mode;
+            document.getElementById('btnIn').className = mode === 'IN' ? 'mode-btn selected-in' : 'mode-btn';
+            document.getElementById('btnOut').className = mode === 'OUT' ? 'mode-btn selected-out' : 'mode-btn';
+        }
+
+        function navigate(pageId, btn) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+            btn.classList.add('active');
+            
+            if(pageId === 'scan') startScanner();
+            else if(html5QrCode) html5QrCode.stop();
+            
+            if(pageId === 'history') renderHistory();
+        }
+
+        function startScanner() {
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                { fps: 25, qrbox: { width: 250, height: 250 } },
+                onScanSuccess
+            );
+        }
+
+        async function onScanSuccess(decodedText) {
+            // Instant feedback
+            document.getElementById('last-scan-status').innerHTML = "✅ SCANNED DONE";
+            
+            const newEntry = {
+                qrContent: decodedText,
+                time: new Date().toLocaleString(),
+                status: scannerMode,
+                userId: document.getElementById('userIdLabel').innerText,
+                synced: false
+            };
+
+            localHistory.unshift(newEntry);
+            localStorage.setItem('qr_history', JSON.stringify(localHistory));
+            
+            sendDataToSheet(newEntry);
+            
+            // Short delay before allowing next scan
+            await html5QrCode.pause();
+            setTimeout(() => {
+                html5QrCode.resume();
+                document.getElementById('last-scan-status').innerText = "";
+            }, 2000);
+        }
+
+        async function sendDataToSheet(entry) {
+            const url = document.getElementById('scriptUrl').value;
+            if(!url) return;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    mode: 'no-cors', // Essential for Google Scripts
+                    body: JSON.stringify(entry)
+                });
+                
+                // Note: with 'no-cors', we won't see the response body, 
+                // but if it doesn't throw an error, it's usually successful.
+                entry.synced = true;
+                localStorage.setItem('qr_history', JSON.stringify(localHistory));
+            } catch (error) {
+                console.error("Sync Error:", error);
+            }
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyContainer');
+            container.innerHTML = localHistory.map(h => `
+                <div class="card">
+                    <span class="sync-badge ${h.synced ? 'synced' : 'pending'}">${h.synced ? 'Synced' : 'Pending'}</span>
+                    <div style="font-size: 1.1em; font-weight: bold;">${h.qrContent}</div>
+                    <div style="font-size: 0.9em; color: #64748b; margin-top:5px;">
+                        ${h.time} | <span style="color:${h.status === 'IN' ? 'var(--in-color)' : 'var(--out-color)'}">${h.status}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function saveConfig() {
+            localStorage.setItem('api_url', document.getElementById('scriptUrl').value);
+        }
+
+        function clearHistory() {
+            if(confirm("Delete all history?")) {
+                localHistory = [];
+                localStorage.removeItem('qr_history');
+                renderHistory();
+            }
+        }
+
+        window.onload = () => {
+            document.getElementById('scriptUrl').value = localStorage.getItem('api_url') || "";
+            startScanner();
+        };
+    </script>
+</body>
+</html>
